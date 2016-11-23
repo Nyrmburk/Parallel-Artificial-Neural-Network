@@ -15,10 +15,21 @@ public class Main {
 
 	public static void main(String[] args) {
 
-		Network network = new FeedForwardNetwork(0L, 1, 3, 2);
+		long time;
+		time = System.currentTimeMillis();
+		Network network = new FeedForwardNetwork(0L, 1,10, 2);
 		network.setInputs(new float[]{1});
-
 		KernelExecutor executor = new SimpleKernelExecutor();
+		System.out.println("initialization took: " + (System.currentTimeMillis() - time));
+
+		for (int i = 0; i < 10; i++) {
+			Iterator<Kernel> forward = network.forward();
+			while (forward.hasNext())
+				executor.execute(forward.next());
+		}
+
+		time = System.currentTimeMillis();
+
 		Iterator<Kernel> forward = network.forward();
 		while (forward.hasNext())
 			executor.execute(forward.next());
@@ -26,10 +37,19 @@ public class Main {
 		float[] out = {0, 0};
 		network.getOutputs(out);
 		System.out.println(Arrays.toString(out));
+		System.out.println("feed forward took: " + (System.currentTimeMillis() - time));
 
+		for (int i = 0; i < 3; i++) {
+			Iterator<Kernel> backward = network.backward(new float[]{1, 2});
+			while (backward.hasNext())
+				executor.execute(backward.next());
+		}
+
+		time = System.currentTimeMillis();
 		Iterator<Kernel> backward = network.backward(new float[]{1, 2});
 		while (backward.hasNext())
 			executor.execute(backward.next());
+		System.out.println("backpropagation took: " + (System.currentTimeMillis() - time));
 
 		network.setInputs(new float[]{1});
 		forward = network.forward();
@@ -38,36 +58,28 @@ public class Main {
 		network.getOutputs(out);
 		System.out.println(Arrays.toString(out));
 
-		final long time = System.currentTimeMillis();
-		Kernel count = new Kernel() {
-			@Override
-			public void run(int i) {
-				try {
-					Thread.sleep(10);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-				System.out.println(i + ": " + Thread.currentThread().getName() + ", @:" + (System.currentTimeMillis() - time));
-			}
+		for (int i = 0; i < 5000; i++) {
+			network.setInputs(new float[]{0.5f});
+			forward = network.forward();
+			while (forward.hasNext())
+				executor.execute(forward.next());
+			network.getOutputs(out);
+			System.out.println(Arrays.toString(out));
 
-			@Override
-			public int size() {
-				return 7;
-			}
-		};
+			backward = network.backward(new float[]{0.5f, 0.3f});
+			while (backward.hasNext())
+				executor.execute(backward.next());
+		}
 
-		KernelExecutor executor1 = new ParallelKernelExecutor();
-//		while (true) {
-			executor1.execute(count);
-//		}
-		System.out.println(System.currentTimeMillis() - time);
-		System.out.println("finished");
-
-		forward = network.forward();
-		while (forward.hasNext())
-			executor1.execute(forward.next());
-		network.getOutputs(out);
-		System.out.println(out[0]);
+//		KernelExecutor executor1 = new ParallelKernelExecutor();
+//
+//		time = System.currentTimeMillis();
+//		forward = network.forward();
+//		while (forward.hasNext())
+//			executor1.execute(forward.next());
+//		network.getOutputs(out);
+//		System.out.println(Arrays.toString(out));
+//		System.out.println("parallel feed forward took: " + (System.currentTimeMillis() - time));
 		System.exit(0);
 	}
 }

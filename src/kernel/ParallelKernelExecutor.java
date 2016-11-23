@@ -93,9 +93,11 @@ public class ParallelKernelExecutor implements KernelExecutor {
 			while (true) {
 				executor.getData(this);
 				executor.activeThreads.incrementAndGet();
+
 				while (from < to)
 					kernel.run(from++);
 				kernel = null;
+
 				synchronized (executor.finishedMonitor) {
 					executor.activeThreads.decrementAndGet();
 					executor.finishedMonitor.notify();

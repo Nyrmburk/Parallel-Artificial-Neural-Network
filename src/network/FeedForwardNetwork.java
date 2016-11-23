@@ -2,7 +2,6 @@ package network;
 
 import kernel.Kernel;
 
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Random;
 
@@ -21,63 +20,86 @@ public class FeedForwardNetwork implements Network {
 	//  O O
 	//    O
 	private int[] neuronsPerLayer;
+
+	// each value holds the neuron starting index of each layer
 	private int[] neuronIndices;
+
+	// each value holds the weight starting index of each layer
 	private int[] weightIndices;
 
 	// this array holds the current values for the network
 	private float[] values;
-	// this array holds the weights for each synapse
+
+	// this array holds the weights for each weight
 	private float[] weights;
 
+	// this is the logic behind feed-forward propagation
 	private LayerKernel forwardKernel = new LayerKernel() {
 		@Override
 		public void run(int i) {
+
+			// calculate the indices necessary for execution
 			int currentIndex = neuronIndices[getDataLayer()];
 			int endIndex = neuronIndices[getDataLayer() + 1];
 			int targetIndex = neuronIndices[getTargetLayer()] + i;
-			int synapseIndex = weightIndices[getDataLayer()] + i * (endIndex - currentIndex);
+			int weightIndex = weightIndices[getDataLayer()] + i * (endIndex - currentIndex);
 
-			values[targetIndex] = 0; // clear the value
+			// feed the values forward
+			values[targetIndex] = 0; // clear the previous value
 			while (currentIndex < endIndex)
-				values[targetIndex] += values[currentIndex++] * weights[synapseIndex++];
+				values[targetIndex] += values[currentIndex++] * weights[weightIndex++];
 
 			// activate
 			values[targetIndex] = activation(values[targetIndex]);
 		}
 	};
 
+	// logic behind back-propagation
 	private LayerKernel backwardKernel = new LayerKernel() {
 		@Override
 		public void run(int i) {
+
+			// calculate indices
 			int currentIndex = neuronIndices[getDataLayer()];
 			int endIndex = currentIndex + neuronsPerLayer[getDataLayer()];
 			int targetIndex = neuronIndices[getTargetLayer()] + i;
-			int synapseIndex = weightIndices[getTargetLayer()] + i;
+			int weightIndex = weightIndices[getTargetLayer()] + i;
+			final int size = size();
 
 			// update weights
 			// accumulate errors
 			float error = 0;
 			while (currentIndex < endIndex) {
-				weights[synapseIndex] += values[targetIndex] * values[currentIndex];
-				error += values[currentIndex] * weights[synapseIndex];
-				synapseIndex += size();
+
+				weights[weightIndex] += values[targetIndex] * values[currentIndex];
+				error += values[currentIndex] * weights[weightIndex];
+
+				// incrementing the synape index by a non-1 value causes the entire kernel to take 10 times longer.
+				// perhaps it is a cache miss?
+				// the problem is that the prefetcher will ignore constant stride of large numbers
+				// investigate to see if there is a way to traverse the memory in a way that plays better with the prefetcher
+				weightIndex += size; // <- this line of code directly affects speed
 				currentIndex++;
 			}
 			values[targetIndex] = values[targetIndex] * (1 - values[targetIndex]) * error;
 		}
 	};
 
+	// the iterators that return the kernels for the forward and backward operations
 	private ForwardLayerIterator forward;
 	private BackwardLayerIterator backward;
 
+	// instantiate a network from a seed (for determinism)
 	public FeedForwardNetwork(long seed, int... neuronsPerLayer) {
 		this(seed, true, neuronsPerLayer);
 	}
 
+	// instantiate a network with a random seed (most likely case)
 	public FeedForwardNetwork(int... neuronsPerLayer) {
 		this(0, false, neuronsPerLayer);
 	}
 
+	// the actual constructor
 	private FeedForwardNetwork(long seed, boolean useSeed, int... neuronsPerLayer) {
 		this.neuronsPerLayer = new int[neuronsPerLayer.length];
 		System.arraycopy(neuronsPerLayer, 0, this.neuronsPerLayer, 0, neuronsPerLayer.length);
@@ -85,6 +107,7 @@ public class FeedForwardNetwork implements Network {
 		neuronIndices = new int[neuronsPerLayer.length];
 		weightIndices = new int[neuronsPerLayer.length - 1];
 
+		// calculate neuron indices
 		int valuesSize = 0;
 		for (int i = 0; i < neuronsPerLayer.length; i++) {
 			int size = neuronsPerLayer[i];
@@ -92,6 +115,7 @@ public class FeedForwardNetwork implements Network {
 			valuesSize += size;
 		}
 
+		// calculate weight indices
 		int weightsSize = 0;
 		int previous = neuronsPerLayer[0];
 		for (int i = 0; i < neuronsPerLayer.length - 1; i++) {
@@ -104,10 +128,10 @@ public class FeedForwardNetwork implements Network {
 		values = new float[valuesSize];
 		weights = new float[weightsSize];
 
+		// fill the weights with random values
 		Random random = useSeed ? new Random(seed) : new Random();
 		for (int i = 0; i < weights.length; i++)
 			weights[i] = random.nextFloat();
-		Arrays.fill(weights, 0.5f);
 
 		forward = new ForwardLayerIterator(this.neuronsPerLayer, forwardKernel);
 		backward = new BackwardLayerIterator(this.neuronsPerLayer, backwardKernel);
@@ -123,6 +147,9 @@ public class FeedForwardNetwork implements Network {
 	public Iterator<Kernel> backward(float[] expected) {
 		backward.reset();
 
+		// perform error calculation of output neurons
+		// TODO: take this and the other version in the backwards kernel and put in method to keep things DRY
+		// soggy code is bad
 		int i = 0;
 		int currentIndex = neuronIndices[neuronIndices.length - 1];
 		int endIndex = currentIndex + neuronsPerLayer[neuronsPerLayer.length - 1];
@@ -133,11 +160,14 @@ public class FeedForwardNetwork implements Network {
 		return backward;
 	}
 
+	// the activation function for each neuron after it has the inputs summed
+	// TODO: maybe allow for the network to have different activation functions
 	private float activation(float value) {
 
 		return (1f / (1 + (float) Math.exp(-value)));
 	}
 
+	// I think this is part of the error calculation
 //	private float errorDerivative(float target, float output) {
 //
 //
@@ -163,6 +193,7 @@ public class FeedForwardNetwork implements Network {
 		System.arraycopy(values, values.length - getOutputCount(), outputs, 0, getOutputCount());
 	}
 
+	// generate a new kernel for each next layer
 	private class ForwardLayerIterator implements Iterator<Kernel> {
 
 		private int[] neuronsPerLayer;
@@ -192,6 +223,7 @@ public class FeedForwardNetwork implements Network {
 		}
 	}
 
+	// generate a new kernel for each previous layer
 	private class BackwardLayerIterator implements Iterator<Kernel> {
 
 		private int[] neuronsPerLayer;
