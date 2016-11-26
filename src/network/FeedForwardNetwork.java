@@ -33,6 +33,10 @@ public class FeedForwardNetwork implements Network {
 	// this array holds the weights for each weight
 	private float[] weights;
 
+	// pre-allocated arrays for getting outputs and errors
+	private float[] outputs;
+	private float[] errors;
+
 	// this is the logic behind feed-forward propagation
 	private LayerKernel forwardKernel = new LayerKernel() {
 		@Override
@@ -127,6 +131,8 @@ public class FeedForwardNetwork implements Network {
 
 		values = new float[valuesSize];
 		weights = new float[weightsSize];
+		outputs = new float[getOutputCount()];
+		errors = new float[getOutputCount()];
 
 		// fill the weights with random values
 		Random random = useSeed ? new Random(seed) : new Random();
@@ -155,8 +161,12 @@ public class FeedForwardNetwork implements Network {
 		int endIndex = currentIndex + neuronsPerLayer[neuronsPerLayer.length - 1];
 		while (currentIndex < endIndex) {
 			float value = values[currentIndex];
-			values[currentIndex++] = value * (1 - value) * (expected[i++] - value);
+			errors[i] = expected[i] - value;
+			values[currentIndex] = value * (1 - value) * errors[i];
+			currentIndex++;
+			i++;
 		}
+
 		return backward;
 	}
 
@@ -189,8 +199,14 @@ public class FeedForwardNetwork implements Network {
 	}
 
 	@Override
-	public void getOutputs(float[] outputs) {
+	public float[] getOutputs() {
 		System.arraycopy(values, values.length - getOutputCount(), outputs, 0, getOutputCount());
+		return outputs;
+	}
+
+	@Override
+	public float[] getErrors() {
+		return errors;
 	}
 
 	// generate a new kernel for each next layer

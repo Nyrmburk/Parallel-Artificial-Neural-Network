@@ -1,9 +1,9 @@
 import kernel.Kernel;
 import kernel.KernelExecutor;
-import kernel.ParallelKernelExecutor;
 import kernel.SimpleKernelExecutor;
 import network.FeedForwardNetwork;
 import network.Network;
+import network.NetworkExecutor;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -22,53 +22,25 @@ public class Main {
 		KernelExecutor executor = new SimpleKernelExecutor();
 		System.out.println("initialization took: " + (System.currentTimeMillis() - time));
 
-		for (int i = 0; i < 10; i++) {
+		NetworkExecutor networkExecutor = new NetworkExecutor(network, executor);
+
+		float[] inputs = new float[]{0.5f};
+		float[] expected = new float[]{0.5f, 0.3f};
+		for (int i = 0; i < 100; i++)
+			System.out.printf("%.6f\n", networkExecutor.train(inputs, expected));
+
+		for (int i = 0; i < 500; i++) {
+			network.setInputs(new float[]{0.5f});
 			Iterator<Kernel> forward = network.forward();
 			while (forward.hasNext())
 				executor.execute(forward.next());
-		}
+			System.out.print(Arrays.toString(network.getOutputs()) + ", ");
 
-		time = System.currentTimeMillis();
-
-		Iterator<Kernel> forward = network.forward();
-		while (forward.hasNext())
-			executor.execute(forward.next());
-
-		float[] out = {0, 0};
-		network.getOutputs(out);
-		System.out.println(Arrays.toString(out));
-		System.out.println("feed forward took: " + (System.currentTimeMillis() - time));
-
-		for (int i = 0; i < 3; i++) {
-			Iterator<Kernel> backward = network.backward(new float[]{1, 2});
+			Iterator<Kernel> backward = network.backward(new float[]{0.5f, 0.3f});
 			while (backward.hasNext())
 				executor.execute(backward.next());
-		}
 
-		time = System.currentTimeMillis();
-		Iterator<Kernel> backward = network.backward(new float[]{1, 2});
-		while (backward.hasNext())
-			executor.execute(backward.next());
-		System.out.println("backpropagation took: " + (System.currentTimeMillis() - time));
-
-		network.setInputs(new float[]{1});
-		forward = network.forward();
-		while (forward.hasNext())
-			executor.execute(forward.next());
-		network.getOutputs(out);
-		System.out.println(Arrays.toString(out));
-
-		for (int i = 0; i < 5000; i++) {
-			network.setInputs(new float[]{0.5f});
-			forward = network.forward();
-			while (forward.hasNext())
-				executor.execute(forward.next());
-			network.getOutputs(out);
-			System.out.println(Arrays.toString(out));
-
-			backward = network.backward(new float[]{0.5f, 0.3f});
-			while (backward.hasNext())
-				executor.execute(backward.next());
+			System.out.println(Arrays.toString(network.getErrors()));
 		}
 
 //		KernelExecutor executor1 = new ParallelKernelExecutor();

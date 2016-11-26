@@ -5,5 +5,5 @@ package training;
  */
 public interface Trainer {
 
-	void train(float error, int iterations);
+	int train(float error, int iterations);
 }

@@ -23,5 +23,7 @@ public interface Network {
 
 	void setInputs(float[] inputs);
 
-	void getOutputs(float[] outputs);
+	float[] getOutputs();
+
+	float[] getErrors();
 }
