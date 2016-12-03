@@ -1,9 +1,7 @@
 import kernel.Kernel;
 import kernel.KernelExecutor;
 import kernel.SimpleKernelExecutor;
-import network.FeedForwardNetwork;
-import network.Network;
-import network.NetworkExecutor;
+import network.*;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -17,7 +15,7 @@ public class Main {
 
 		long time;
 		time = System.currentTimeMillis();
-		Network network = new FeedForwardNetwork(0L, 1,10, 2);
+		Network network = new FeedForwardNetwork(0L, 1, 100, 2);
 		network.setInputs(new float[]{1});
 		KernelExecutor executor = new SimpleKernelExecutor();
 		System.out.println("initialization took: " + (System.currentTimeMillis() - time));
@@ -26,10 +24,10 @@ public class Main {
 
 		float[] inputs = new float[]{0.5f};
 		float[] expected = new float[]{0.5f, 0.3f};
-		for (int i = 0; i < 100; i++)
-			System.out.printf("%.6f\n", networkExecutor.train(inputs, expected));
+//		for (int i = 0; i < 100; i++)
+//			System.out.printf("%.6f\n", networkExecutor.train(inputs, expected));
 
-		for (int i = 0; i < 500; i++) {
+		for (int i = 0; i < 30; i++) {
 			network.setInputs(new float[]{0.5f});
 			Iterator<Kernel> forward = network.forward();
 			while (forward.hasNext())

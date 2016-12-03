@@ -2,6 +2,7 @@ package network;
 
 import kernel.Kernel;
 
+import java.io.*;
 import java.util.Iterator;
 import java.util.Random;
 
@@ -30,12 +31,21 @@ public class FeedForwardNetwork implements Network {
 	// this array holds the current values for the network
 	private float[] values;
 
+	// this array holds the biases for each neuron
+	private float[] biases;
+
 	// this array holds the weights for each weight
 	private float[] weights;
 
 	// pre-allocated arrays for getting outputs and errors
 	private float[] outputs;
 	private float[] errors;
+
+	private float learningRate = 0.05f;
+	private float momentumWeight = 0;
+
+	private Activation activation = new SigmoidActivation();
+	private Cost cost = new CrossEntropyCost();
 
 	// this is the logic behind feed-forward propagation
 	private LayerKernel forwardKernel = new LayerKernel() {
@@ -54,7 +64,7 @@ public class FeedForwardNetwork implements Network {
 				values[targetIndex] += values[currentIndex++] * weights[weightIndex++];
 
 			// activate
-			values[targetIndex] = activation(values[targetIndex]);
+			values[targetIndex] = activation.activation(values[targetIndex] + biases[targetIndex]);
 		}
 	};
 
@@ -75,17 +85,18 @@ public class FeedForwardNetwork implements Network {
 			float error = 0;
 			while (currentIndex < endIndex) {
 
-				weights[weightIndex] += values[targetIndex] * values[currentIndex];
+				weights[weightIndex] -= getLearningRate() * values[targetIndex] * values[currentIndex];
+				biases[currentIndex] -= getLearningRate() * values[currentIndex];
 				error += values[currentIndex] * weights[weightIndex];
 
-				// incrementing the synape index by a non-1 value causes the entire kernel to take 10 times longer.
+				// incrementing the weight index by a non-1 value causes the entire kernel to take 10 times longer.
 				// perhaps it is a cache miss?
 				// the problem is that the prefetcher will ignore constant stride of large numbers
 				// investigate to see if there is a way to traverse the memory in a way that plays better with the prefetcher
 				weightIndex += size; // <- this line of code directly affects speed
 				currentIndex++;
 			}
-			values[targetIndex] = values[targetIndex] * (1 - values[targetIndex]) * error;
+			values[targetIndex] = error;//activationDerivative(values[targetIndex]) * error;
 		}
 	};
 
@@ -130,6 +141,7 @@ public class FeedForwardNetwork implements Network {
 		}
 
 		values = new float[valuesSize];
+		biases = new float[valuesSize];
 		weights = new float[weightsSize];
 		outputs = new float[getOutputCount()];
 		errors = new float[getOutputCount()];
@@ -154,34 +166,18 @@ public class FeedForwardNetwork implements Network {
 		backward.reset();
 
 		// perform error calculation of output neurons
-		// TODO: take this and the other version in the backwards kernel and put in method to keep things DRY
-		// soggy code is bad
 		int i = 0;
 		int currentIndex = neuronIndices[neuronIndices.length - 1];
 		int endIndex = currentIndex + neuronsPerLayer[neuronsPerLayer.length - 1];
 		while (currentIndex < endIndex) {
-			float value = values[currentIndex];
-			errors[i] = expected[i] - value;
-			values[currentIndex] = value * (1 - value) * errors[i];
+			errors[i] = cost.costDerivative(values[currentIndex], expected[i], values[currentIndex], activation);
+			values[currentIndex] = errors[i];
 			currentIndex++;
 			i++;
 		}
 
 		return backward;
 	}
-
-	// the activation function for each neuron after it has the inputs summed
-	// TODO: maybe allow for the network to have different activation functions
-	private float activation(float value) {
-
-		return (1f / (1 + (float) Math.exp(-value)));
-	}
-
-	// I think this is part of the error calculation
-//	private float errorDerivative(float target, float output) {
-//
-//
-//	}
 
 	@Override
 	public int getInputCount() {
@@ -207,6 +203,38 @@ public class FeedForwardNetwork implements Network {
 	@Override
 	public float[] getErrors() {
 		return errors;
+	}
+
+	public float getLearningRate() {
+		return learningRate;
+	}
+
+	public void setLearningRate(float learningRate) {
+		this.learningRate = learningRate;
+	}
+
+	public float getMomentumWeight() {
+		return momentumWeight;
+	}
+
+	public void setMomentumWeight(float momentumWeight) {
+		this.momentumWeight = momentumWeight;
+	}
+
+	public Activation getActivation() {
+		return activation;
+	}
+
+	public void setActivation(Activation activation) {
+		this.activation = activation;
+	}
+
+	public Cost getCost() {
+		return cost;
+	}
+
+	public void setCost(Cost cost) {
+		this.cost = cost;
 	}
 
 	// generate a new kernel for each next layer
@@ -292,5 +320,48 @@ public class FeedForwardNetwork implements Network {
 		public int getDataLayer() {
 			return dataLayer;
 		}
+	}
+
+	public static void save(File file, FeedForwardNetwork network) throws IOException {
+
+		// binary file is as follows:
+		// topology length
+		// topology
+		// learning rate
+		// momentum rate
+		// weights
+
+		DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(file)));
+		out.writeInt(network.neuronsPerLayer.length);
+		for (int i = 0; i < network.neuronsPerLayer.length; i++)
+			out.writeInt(network.neuronsPerLayer[i]);
+		out.writeFloat(network.getLearningRate());
+		out.writeFloat(network.getMomentumWeight());
+		for (int i = 0; i < network.weights.length; i++)
+			out.writeFloat(network.weights[i]);
+		out.close();
+	}
+
+	public static FeedForwardNetwork load(File file) throws IOException {
+
+		DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
+
+		int[] topology = new int[in.readInt()];
+		for (int i = 0; i < topology.length; i++)
+			topology[i] = in.readInt();
+		float learningRate = in.readFloat();
+		float momentumWeight = in.readFloat();
+
+		FeedForwardNetwork network = new FeedForwardNetwork(topology);
+
+		network.setLearningRate(learningRate);
+		network.setMomentumWeight(momentumWeight);
+
+		for (int i = 0; i < network.weights.length; i++)
+			network.weights[i] = in.readFloat();
+
+		in.close();
+
+		return network;
 	}
 }
