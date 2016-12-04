@@ -1,4 +1,6 @@
-package network;
+package cost;
+
+import activation.Activation;
 
 /**
  * Created by Nyrmburk on 12/3/2016.

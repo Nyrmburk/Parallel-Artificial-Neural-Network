@@ -1,5 +1,9 @@
 package network;
 
+import activation.Activation;
+import activation.SigmoidActivation;
+import cost.Cost;
+import cost.CrossEntropyCost;
 import kernel.Kernel;
 
 import java.io.*;

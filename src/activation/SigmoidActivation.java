@@ -1,4 +1,4 @@
-package network;
+package activation;
 
 /**
  * Created by Nyrmburk on 12/3/2016.
